@@ -221,30 +221,31 @@ class App:
             os.makedirs(App.data_dir, 0o777)
         return App.data_dir
 
-    def __init__(self):
-        self._parser = argparse.ArgumentParser(description='A Service Checker written in python.')
-
     def run(self):
         default_command = "check_services"
-        valid_commands = default_command + ""
-        self._parser.add_argument('--command', type=RegexValidator(r"^(" + valid_commands + ")$", True),
-                                  help='command to be executed: {}'.format(valid_commands), default="check_services")
-        self._parser.add_argument('--log_level', type=int, default=logging.INFO,
-                                  help='CRITICAL = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10, NOTSET = 0')
-        self._parser.add_argument('--log_file', type=str, default=None, help='log file')
+        valid_commands = default_command + "|send_mail"
+        parser = argparse.ArgumentParser(description='A Service Checker written in python.')
+        parser.add_argument('--command', type=RegexValidator(r"^(" + valid_commands + ")$", True),
+                            help='command to be executed: {}'.format(valid_commands), default="check_services")
+        parser.add_argument('--log_level', type=int, default=logging.INFO,
+                            help='CRITICAL = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10, NOTSET = 0')
+        parser.add_argument('--log_file', type=str, default=None, help='log file')
 
-        args = self._parser.parse_args(sys.argv[1:])
-        App.setup_logging(args.log_level, args.log_file)
+        known_args = parser.parse_known_args()[0]
+        App.setup_logging(known_args.log_level, known_args.log_file)
         logger = logging.getLogger(__name__)
-        logger.info("running command {}".format(args.command))
-        getattr(self, args.command)()
+        logger.info("running command {}".format(known_args.command))
+        getattr(self, known_args.command)()
 
-    def check_services(self):
+    @staticmethod
+    def check_services():
         logger = logging.getLogger(__name__)
-        self._parser.add_argument('--config', type=JsonFileValidator(), default="PyServiceCheckerConfig.json",
-                                  help="The configuration file: Sample provided in the project directory")
-        args = self._parser.parse_args(sys.argv[1:])
-        config = args.config
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--config', type=JsonFileValidator(), default="PyServiceCheckerConfig.json",
+                            help="The configuration file: Sample provided in the project directory")
+
+        known_args = parser.parse_known_args()[0]
+        config = known_args.config
         logger.debug("data: {}".format(config))
         smtp = Smtp.create_from_dict(config)
         logger.debug("smtp settings: {}".format(str(smtp)))
@@ -261,7 +262,23 @@ class App:
         if len(recipient_messages) > 0:
             subject = "Messages from mbits service check on host " + socket.gethostname().lower().strip()
             for mail_addr, messages in recipient_messages.items():
-                smtp.send_mail(mail_addr, subject,  "\r\n".join(messages))
+                smtp.send_mail(mail_addr, subject, "\r\n".join(messages))
+
+    @staticmethod
+    def send_mail():
+        logger = logging.getLogger(__name__)
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--config', type=JsonFileValidator(), default="PyServiceCheckerConfig.json",
+                            help="The configuration file: Sample provided in the project directory")
+        parser.add_argument('--subject', type=str, required=True, help="message subject")
+        parser.add_argument('--text', type=str, required=True, help="message text")
+        parser.add_argument('--recipient', type=str, required=True, help="message recipient")
+
+        known_args = parser.parse_known_args()[0]
+        config = known_args.config
+        logger.debug("data: {}".format(config))
+        smtp = Smtp.create_from_dict(config)
+        smtp.send_mail(known_args.recipient, known_args.subject, known_args.text)
 
     @staticmethod
     def setup_logging(log_level=logging.INFO, log_file=None):
