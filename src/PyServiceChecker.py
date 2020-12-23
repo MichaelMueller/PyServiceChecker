@@ -15,6 +15,7 @@ from typing import Dict, List
 
 class RegexValidator(object):
     EMAIL = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+    HOSTNAME_OR_IP: str = r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])$"
 
     def __init__(self, pattern, lowercase):
         self._pattern = pattern
@@ -27,6 +28,20 @@ class RegexValidator(object):
         if not pattern.match(value):
             raise argparse.ArgumentTypeError(
                 "'{}' is not valid - expected pattern: {}".format(value, self._pattern))
+        return value
+
+
+class NonZeroPositiveInt(object):
+
+    def __call__(self, value: str):
+        err = "'{}' is not valid - expected non zero, positive integer".format(value)
+        try:
+            value = int(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError(err)
+
+        if not value > 0:
+            raise argparse.ArgumentTypeError(err)
         return value
 
 
@@ -71,11 +86,11 @@ class Smtp(DataObject):
     @staticmethod
     def create_from_dict(data: Dict):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--smtp_host", type=str, required=True)
+        parser.add_argument("--smtp_host", type=RegexValidator(RegexValidator.HOSTNAME_OR_IP, True), required=True)
         parser.add_argument("--smtp_username", type=str, required=True)
         parser.add_argument("--smtp_password", type=str, required=True)
-        parser.add_argument("--smtp_port", type=int, required=True)
-        parser.add_argument("--smtp_from_address", type=str, required=True)
+        parser.add_argument("--smtp_port", type=NonZeroPositiveInt(), required=True)
+        parser.add_argument("--smtp_from_address", type=RegexValidator(RegexValidator.EMAIL, True), required=True)
         args = DataObject.dict_to_args(data)
         object_data = parser.parse_args(args)
         return Smtp(object_data.__dict__)
@@ -106,6 +121,18 @@ class Smtp(DataObject):
 
 
 class Service(DataObject):
+
+    @staticmethod
+    def create_from_dict(data: Dict):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--name", type=str, required=True)
+        parser.add_argument("--enabled", type=bool, required=True)
+        parser.add_argument("--address", type=RegexValidator(RegexValidator.HOSTNAME_OR_IP, True), required=True)
+        parser.add_argument("--port", type=NonZeroPositiveInt(), required=True)
+        parser.add_argument("--message_recipient", type=RegexValidator(RegexValidator.EMAIL, True), required=True)
+        args = DataObject.dict_to_args(data)
+        object_data = parser.parse_args(args)
+        return Service(object_data.__dict__)
 
     def __init__(self, data: Dict):
         self.name = ""  # type: str
@@ -156,18 +183,6 @@ class Service(DataObject):
         return os.path.join(App.detect_data_dir(), file_basename)
 
 
-def create_from_dict(data: Dict):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--name", type=str, required=True)
-    parser.add_argument("--enabled", type=bool, required=True)
-    parser.add_argument("--address", type=str, required=True)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--message_recipient", type=str, required=True)
-    args = DataObject.dict_to_args(data)
-    object_data = parser.parse_args(args)
-    return Service(object_data.__dict__)
-
-
 class Services(object):
 
     @staticmethod
@@ -177,7 +192,7 @@ class Services(object):
 
         services = []
         for service_data in data["services"]:
-            services.append(create_from_dict(service_data))
+            services.append(Service.create_from_dict(service_data))
         return Services(services)
 
     def __init__(self, services: List[Service]):
