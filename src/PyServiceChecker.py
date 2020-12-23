@@ -280,7 +280,7 @@ class App:
         if len(recipient_messages) > 0:
             subject = "Messages from mbits service check on host " + socket.gethostname().lower().strip()
             for mail_addr, messages in recipient_messages.items():
-                smtp.send_mail(mail_addr, subject, "\n\n  -".join(messages))
+                smtp.send_mail(mail_addr, subject, "\n\n".join(messages))
 
     @staticmethod
     def send_mail():
