@@ -143,6 +143,7 @@ class Service(DataObject):
         self.assign(data)
 
     def check_and_create_message(self):
+        logger = logging.getLogger(__name__)
         if not self.enabled:
             return None, self.message_recipient
         status_file = self._status_file_path()
@@ -160,6 +161,8 @@ class Service(DataObject):
             else:
                 with open(status_file, 'a'):
                     os.utime(status_file, None)
+
+            logger.info(message)
 
         return message, self.message_recipient
 
@@ -277,7 +280,7 @@ class App:
         if len(recipient_messages) > 0:
             subject = "Messages from mbits service check on host " + socket.gethostname().lower().strip()
             for mail_addr, messages in recipient_messages.items():
-                smtp.send_mail(mail_addr, subject, "\r\n".join(messages))
+                smtp.send_mail(mail_addr, subject, "\n\n  -".join(messages))
 
     @staticmethod
     def send_mail():
