@@ -1,0 +1,14 @@
+{
+
+  "services": [
+    {
+      "name": "Google Test",
+      "enabled": true,
+      "address": "google.de",
+      "port": 80,
+      "message_recipient": "admin@mydomain.de",
+      "test_method": "tcp_port",
+      "only_on_host": ""
+    }
+  ]
+}

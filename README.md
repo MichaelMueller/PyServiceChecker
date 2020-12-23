@@ -1,2 +1,2 @@
 # PyServiceChecker
-A Service Checker written in python
+A Service Checker written in python.
