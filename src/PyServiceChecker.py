@@ -75,7 +75,7 @@ class Smtp(DataObject):
         parser.add_argument("--smtp_username", type=str, required=True)
         parser.add_argument("--smtp_password", type=str, required=True)
         parser.add_argument("--smtp_port", type=int, required=True)
-        parser.add_argument("--smtp_from_address", type=int, required=True)
+        parser.add_argument("--smtp_from_address", type=str, required=True)
         args = DataObject.dict_to_args(data)
         object_data = parser.parse_args(args)
         return Smtp(object_data.__dict__)
@@ -116,6 +116,8 @@ class Service(DataObject):
         self.assign(data)
 
     def check_and_create_message(self):
+        if not self.enabled:
+            return None, self.message_recipient
         status_file = self._status_file_path()
         was_offline = os.path.exists(status_file)
         was_online = not was_offline
@@ -125,7 +127,7 @@ class Service(DataObject):
         message = None
         if status_changed:
             message = "Service '" + self.name + "' on host:port '" + str(self.address) + ":" + str(
-                self.port) + "') is {}" + "\r\n".format("*ONLINE* again" if is_now_online else "*OFFLINE*")
+                self.port) + "' is {}".format("*ONLINE* again" if is_now_online else "*OFFLINE*")
             if is_now_online:
                 os.remove(status_file)
             else:
@@ -146,12 +148,12 @@ class Service(DataObject):
 
         output = App.run_cmd(cmd)
         service_reachable = re.search(search_term, output, re.I) is not None
-        logger.debug("output: %s, serverPortReachable: %s" % (output, str(service_reachable)))
+        logger.debug("output: %s, service_reachable: %s" % (output, str(service_reachable)))
         return service_reachable
 
     def _status_file_path(self):
         file_basename = hashlib.md5(self.name.encode('utf-8')).hexdigest()
-        return os.path.join(App.detect_app_data_dir(), file_basename)
+        return os.path.join(App.detect_data_dir(), file_basename)
 
 
 def create_from_dict(data: Dict):
@@ -187,7 +189,7 @@ class Services(object):
 
 
 class App:
-    app_data_dir = None
+    data_dir = None
 
     @staticmethod
     def run_cmd(cmd):
@@ -199,25 +201,25 @@ class App:
         return str(output).strip()
 
     @staticmethod
-    def detect_app_data_dir():
-        if Service.app_data_dir is not None:
-            return Service.app_data_dir
+    def detect_data_dir():
+        if App.data_dir is not None:
+            return App.data_dir
 
-        app_name = os.path.basename(__name__)
+        app_name = os.path.basename("PyServiceChecker")
         if sys.platform == 'darwin':
             import AppKit
             # http://developer.apple.com/DOCUMENTATION/Cocoa/Reference/Foundation/Miscellaneous/Foundation_Functions/Reference/reference.html#//apple_ref/c/func/NSSearchPathForDirectoriesInDomains
             # NSApplicationSupportDirectory = 14
             # NSUserDomainMask = 1
             # True for expanding the tilde into a fully qualified path
-            Service.app_data_dir = path.join(AppKit.NSSearchPathForDirectoriesInDomains(14, 1, True)[0], app_name)
+            App.data_dir = path.join(AppKit.NSSearchPathForDirectoriesInDomains(14, 1, True)[0], app_name)
         elif sys.platform == 'win32':
-            Service.app_data_dir = path.join(os.environ['APPDATA'], app_name)
+            App.data_dir = path.join(os.environ['APPDATA'], app_name)
         else:
-            Service.app_data_dir = path.expanduser(path.join("~", "." + app_name))
-        if not os.path.exists(Service.app_data_dir):
-            os.makedirs(Service.app_data_dir, 0o777)
-        return Service.app_data_dir
+            App.data_dir = path.expanduser(path.join("~", "." + app_name))
+        if not os.path.exists(App.data_dir):
+            os.makedirs(App.data_dir, 0o777)
+        return App.data_dir
 
     def __init__(self):
         self._parser = argparse.ArgumentParser(description='A Service Checker written in python.')
@@ -248,18 +250,18 @@ class App:
         logger.debug("smtp settings: {}".format(str(smtp)))
         services = Services.create_from_list(config)
         logger.debug("services: {}".format(services))
-        messages = {}
+        recipient_messages = {}
         for service in services.items:
             message, message_recipient = service.check_and_create_message()
             if message:
-                if message_recipient not in messages.keys():
-                    messages[message_recipient] = []
-                messages[message_recipient].append(message)
+                if message_recipient not in recipient_messages.keys():
+                    recipient_messages[message_recipient] = []
+                recipient_messages[message_recipient].append(message)
 
-        if len(messages) > 0:
+        if len(recipient_messages) > 0:
             subject = "Messages from mbits service check on host " + socket.gethostname().lower().strip()
-            for mail_addr, message in messages.items():
-                smtp.send_mail(mail_addr, subject, message)
+            for mail_addr, messages in recipient_messages.items():
+                smtp.send_mail(mail_addr, subject,  "\r\n".join(messages))
 
     @staticmethod
     def setup_logging(log_level=logging.INFO, log_file=None):

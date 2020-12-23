@@ -1,14 +1,16 @@
 {
-
+  "smtp_host": "mail.gmx.net",
+  "smtp_username": "someone@gmx.com",
+  "smtp_password": "password",
+  "smtp_port": 465,
+  "smtp_from_address": "someone@gmx.com",
   "services": [
     {
-      "name": "Google Test",
+      "name": "Google Page",
       "enabled": true,
-      "address": "google.de",
+      "address": "google.com",
       "port": 80,
-      "message_recipient": "admin@mydomain.de",
-      "test_method": "tcp_port",
-      "only_on_host": ""
+      "message_recipient": "anotherone@gmail.com"
     }
   ]
 }
